@@ -1,4 +1,5 @@
 ﻿using LandonApi.Models;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -7,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace LandonApi
 {
-    public class HotelApiContext : DbContext
+    public class HotelApiContext : IdentityDbContext<UserEntity, UserRoleEntity, Guid>
     {
         public HotelApiContext(DbContextOptions options)
             : base(options) { }

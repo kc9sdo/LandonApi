@@ -17,6 +17,7 @@ using Microsoft.EntityFrameworkCore;
 using LandonApi.Services;
 using AutoMapper;
 using Newtonsoft.Json;
+using Microsoft.AspNetCore.Identity;
 
 namespace LandonApi
 {
@@ -53,7 +54,13 @@ namespace LandonApi
             // TODO: Swap out with a real database in production
             services.AddDbContext<HotelApiContext>(opt => opt.UseInMemoryDatabase("LandonDb"));
 
+            // Add ASP.NET Core Identity
+            services.AddIdentity<UserEntity, UserRoleEntity>()
+                .AddEntityFrameworkStores<HotelApiContext>()
+                .AddDefaultTokenProviders();
+
             services.AddAutoMapper();
+            services.AddResponseCaching();
 
             // Add framework services.
             services.AddMvc(opt =>
@@ -68,6 +75,11 @@ namespace LandonApi
                 var jsonFormatter = opt.OutputFormatters.OfType<JsonOutputFormatter>().Single();
                 opt.OutputFormatters.Remove(jsonFormatter);
                 opt.OutputFormatters.Add(new IonOutputFormatter(jsonFormatter));
+
+                opt.CacheProfiles.Add("Static", new CacheProfile
+                {
+                    Duration = 86400
+                });
             })
             .AddJsonOptions(opt =>
             {
@@ -96,6 +108,7 @@ namespace LandonApi
             services.AddScoped<IOpeningService, DefaultOpeningService>();
             services.AddScoped<IBookingService, DefaultBookingService>();
             services.AddScoped<IDateLogicService, DefaultDateLogicService>();
+            services.AddScoped<IUserService, DefaultUserService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -107,6 +120,13 @@ namespace LandonApi
             // Add some test data in development
             if (env.IsDevelopment())
             {
+                // Add test roles and users
+                var roleManager = app.ApplicationServices
+                    .GetRequiredService<RoleManager<UserRoleEntity>>();
+                var userManager = app.ApplicationServices
+                    .GetRequiredService<UserManager<UserEntity>>();
+                AddTestUsers(roleManager, userManager).Wait();
+
                 var context = app.ApplicationServices.GetRequiredService<HotelApiContext>();
                 var dateLogicService = app.ApplicationServices.GetRequiredService<IDateLogicService>();
                 AddTestData(context, dateLogicService);
@@ -119,27 +139,52 @@ namespace LandonApi
                 opt.Preload();
             });
 
+            app.UseResponseCaching();
             app.UseMvc();
             //app.UseApiVersioning();
+        }
+
+        private static async Task AddTestUsers(
+            RoleManager<UserRoleEntity> roleManager,
+            UserManager<UserEntity> userManager)
+        {
+            // Add a test role
+            await roleManager.CreateAsync(new UserRoleEntity("Admin"));
+
+            // Add a test user
+            var user = new UserEntity
+            {
+                Email = "admin@landon.local",
+                UserName = "admin@landon.local",
+                FirstName = "Admin",
+                LastName = "Testerman",
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+
+            await userManager.CreateAsync(user, "Supersecret123!!");
+
+            // Put the user in the admin role
+            await userManager.AddToRoleAsync(user, "Admin");
+            await userManager.UpdateAsync(user);
         }
 
         private static void AddTestData(
             HotelApiContext context,
             IDateLogicService dateLogicService)
         {
-            var oxford = context.Rooms.Add(new RoomEntity
-            {
-                Id = Guid.Parse("301df04d-8679-4b1b-ab92-0a586ae53d08"),
-                Name = "Oxford Suite",
-                Rate = 10119,
-            }).Entity;
-
             context.Rooms.Add(new RoomEntity
             {
                 Id = Guid.Parse("ee2b83be-91db-4de5-8122-35a9e9195976"),
                 Name = "Driscoll Suite",
                 Rate = 23959
             });
+
+            var oxford = context.Rooms.Add(new RoomEntity
+            {
+                Id = Guid.Parse("301df04d-8679-4b1b-ab92-0a586ae53d08"),
+                Name = "Oxford Suite",
+                Rate = 10119,
+            }).Entity;
 
             var today = DateTimeOffset.Now;
             var start = dateLogicService.AlignStartTime(today);

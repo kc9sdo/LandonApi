@@ -16,7 +16,7 @@ namespace LandonApi.Services
         Task<PagedResults<Room>> GetRoomsAsync(
             PagingOptions pagingOptions,
             SortOptions<Room, RoomEntity> sortOptions,
+            SearchOptions<Room, RoomEntity> searchOptions,
             CancellationToken ct);
-
     }
 }
